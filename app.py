@@ -1,5 +1,9 @@
 import streamlit as st
 import google.generativeai as genai
+from datetime import datetime
+import json
+import os
+from pathlib import Path
 
 # ------------------------------
 # Configure Gemini API Key
@@ -12,9 +16,83 @@ if not GEMINI_API_KEY:
 genai.configure(api_key=GEMINI_API_KEY)
 
 # ------------------------------
+# Initialize Session State for History
+# ------------------------------
+# Define history file path
+HISTORY_FILE = Path.home() / ".writewise_history.json"
+
+def load_history():
+    """Load history from JSON file"""
+    try:
+        if HISTORY_FILE.exists():
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        st.error(f"Error loading history: {e}")
+    return []
+
+def save_history(history):
+    """Save history to JSON file"""
+    try:
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        st.error(f"Error saving history: {e}")
+
+# Load history from file on startup
+if "history" not in st.session_state:
+    st.session_state.history = load_history()
+
+# Constants for history display
+PROMPT_PREVIEW_LENGTH = 100
+CONTENT_PREVIEW_LENGTH = 300
+
+# ------------------------------
 # Streamlit App UI
 # ------------------------------
 st.set_page_config(page_title="Write Wise- AI Content Generator", layout="wide")
+
+# ------------------------------
+# Sidebar - History Feature
+# ------------------------------
+with st.sidebar:
+    st.header("📜 History")
+    
+    if st.session_state.history:
+        st.caption(f"Total entries: {len(st.session_state.history)}")
+        
+        # Clear history button
+        if st.button("🗑️ Clear All History", use_container_width=True):
+            st.session_state.history = []
+            save_history([])  # Save empty history to file
+            st.rerun()
+        
+        st.markdown("---")
+        
+        # Display history items
+        for idx, item in enumerate(reversed(st.session_state.history)):
+            # Use timestamp as unique key component
+            entry_key = f"{item['timestamp']}_{idx}"
+            with st.expander(f"📝 {item['timestamp']} - {item['model']}", expanded=False):
+                st.markdown(f"**Prompt:** {item['prompt'][:PROMPT_PREVIEW_LENGTH]}{'...' if len(item['prompt']) > PROMPT_PREVIEW_LENGTH else ''}")
+                st.markdown(f"**Depth:** {item['depth']}")
+                st.markdown("**Generated Content:**")
+                st.markdown(item['content'][:CONTENT_PREVIEW_LENGTH] + "..." if len(item['content']) > CONTENT_PREVIEW_LENGTH else item['content'])
+                
+                # View full content button
+                if st.button(f"View Full Content", key=f"view_{entry_key}"):
+                    st.session_state[f"viewing_{entry_key}"] = True
+                
+                # Show full content if button was clicked
+                if st.session_state.get(f"viewing_{entry_key}", False):
+                    st.markdown("**Full Content:**")
+                    st.markdown(item['content'])
+                    if st.button(f"Hide", key=f"hide_{entry_key}"):
+                        st.session_state[f"viewing_{entry_key}"] = False
+                        st.rerun()
+    else:
+        st.info("No history yet. Generate content to see it here!")
+
 st.title("Write Wise - AI Content Generator")
 st.subheader("Generate high-quality content from your prompts!")
 
@@ -106,6 +184,17 @@ if st.button("Generate Content"):
                     st.success("✅ Content Generated Successfully!")
                     st.markdown("---")
                     st.markdown(output_text)
+                    
+                    # Save to history
+                    history_entry = {
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "prompt": user_prompt,
+                        "model": model_choice,
+                        "depth": depth_choice,
+                        "content": output_text
+                    }
+                    st.session_state.history.append(history_entry)
+                    save_history(st.session_state.history)  # Persist to file
                 else:
                     st.error("⚠️ No content returned by the model. Try a different prompt or model.")
 
