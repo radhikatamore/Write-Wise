@@ -962,15 +962,24 @@ Format your response with clear section headers (use ## for section titles) so e
             if generate_section:
                 main_topic = st.session_state.get('main_topic', '')
                 additional_context = st.session_state.get('additional_context', '')
+                custom_prompt_input = st.session_state.get('structured_prompt_input', '')
                 
-                section_prompt = f"""Topic: {main_topic}
+                if not additional_context:
+                    additional_context = st.session_state.get('context_input', '')
 
-Section to generate: {section}
+                if custom_prompt_input:
+                    user_requirements = f"User Requirements/Prompt: {custom_prompt_input}\n\n"
+                else:
+                    user_requirements = ""
 
-Context: {additional_context}
-
-Please generate detailed, comprehensive content specifically for the "{section}" section of this document. 
-Make sure the content is relevant, well-structured, and appropriate for this section."""
+                section_prompt = (
+                    f"Topic: {main_topic}\n\n"
+                    f"{user_requirements}"
+                    f"Section to generate: {section}\n\n"
+                    f"Context: {additional_context}\n\n"
+                    "Please generate detailed, comprehensive content specifically for this section. "
+                    "Ensure the response reflects the user's requirements and stays tightly aligned with the section focus."
+                )
                 
                 with st.spinner(f"Generating {section}..."):
                     try:
